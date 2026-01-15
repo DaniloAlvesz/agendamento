@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  PROFESSIONAL
+  CUSTOMER
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+}
+
+model User {
+  id           String             @id @default(cuid())
+  email        String             @unique
+  passwordHash String?
+  role         UserRole
+  createdAt    DateTime           @default(now())
+
+  professionalProfile ProfessionalProfile?
+  customerProfile     CustomerProfile?
+}
+
+model ProfessionalProfile {
+  id          String              @id @default(cuid())
+  userId      String              @unique
+  slug        String              @unique
+  name        String
+  phone       String?
+  timezone    String              @default("America/Recife")
+  address     String?
+  createdAt   DateTime            @default(now())
+
+  user         User               @relation(fields: [userId], references: [id])
+  services     Service[]
+  availability AvailabilityRule[]
+  bookings     Booking[]
+  blocks       Block[]
+  customers    CustomerProfile[]
+  auditLogs    AuditLog[]
+  notifications NotificationLog[]
+}
+
+model CustomerProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  professionalId String?
+  name           String
+  phone          String?
+  createdAt      DateTime @default(now())
+
+  user         User                @relation(fields: [userId], references: [id])
+  professional ProfessionalProfile? @relation(fields: [professionalId], references: [id])
+  bookings     Booking[]
+}
+
+model Service {
+  id              String   @id @default(cuid())
+  professionalId  String
+  name            String
+  description     String?
+  durationMinutes Int
+  priceCents      Int
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  bookings     Booking[]
+
+  @@index([professionalId])
+}
+
+model AvailabilityRule {
+  id              String   @id @default(cuid())
+  professionalId  String
+  dayOfWeek       Int
+  startTime       String
+  endTime         String
+  breakStart      String?
+  breakEnd        String?
+  intervalMinutes Int      @default(15)
+  active          Boolean  @default(true)
+
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id])
+
+  @@index([professionalId, dayOfWeek])
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  professionalId String
+  customerId     String
+  serviceId      String
+  startAt        DateTime
+  endAt          DateTime
+  notes          String?
+  status         BookingStatus @default(CONFIRMED)
+  createdAt      DateTime      @default(now())
+
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id])
+  customer     CustomerProfile     @relation(fields: [customerId], references: [id])
+  service      Service             @relation(fields: [serviceId], references: [id])
+  notifications NotificationLog[]
+
+  @@index([professionalId, startAt])
+  @@index([customerId])
+}
+
+model Block {
+  id             String   @id @default(cuid())
+  professionalId String
+  startAt        DateTime
+  endAt          DateTime
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id])
+
+  @@index([professionalId, startAt])
+}
+
+model NotificationLog {
+  id             String              @id @default(cuid())
+  professionalId String?
+  bookingId      String?
+  channel        NotificationChannel
+  status         String
+  payload        Json
+  createdAt      DateTime            @default(now())
+
+  professional ProfessionalProfile? @relation(fields: [professionalId], references: [id])
+  booking      Booking?             @relation(fields: [bookingId], references: [id])
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  professionalId String
+  actorId        String?
+  action         String
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  professional ProfessionalProfile @relation(fields: [professionalId], references: [id])
+}
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
